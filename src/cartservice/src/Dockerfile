@@ -18,11 +18,15 @@ ARG BUILDPLATFORM=linux/amd64
 # https://mcr.microsoft.com/product/dotnet/sdk
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.100-noble@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71 AS builder
 ARG TARGETARCH=amd64
+
 WORKDIR /app
+
 COPY cartservice.csproj .
 RUN dotnet restore cartservice.csproj \
     -a $TARGETARCH
+
 COPY . .
+
 RUN dotnet publish cartservice.csproj \
     -p:PublishSingleFile=true \
     -a $TARGETARCH \
@@ -32,24 +36,25 @@ RUN dotnet publish cartservice.csproj \
     -c release \
     -o /cartservice
 
+# 🔥 Add grpc_health_probe HERE
+ENV GRPC_HEALTH_PROBE_VERSION=v0.4.24
+RUN apt-get update && apt-get install -y wget && \
+    wget -qO /bin/grpc_health_probe \
+    https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
+    chmod +x /bin/grpc_health_probe
+
 # https://mcr.microsoft.com/product/dotnet/runtime-deps
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0.0-noble-chiseled@sha256:b857c8cb8d929183cfe4c6dd9994abba92a2639dd2dbaf06005379f815991604
 
 WORKDIR /app
+
 COPY --from=builder /cartservice .
+COPY --from=builder /grpc_health_probe /bin/grpc_health_probe
 
 EXPOSE 7070
 
 ENV DOTNET_EnableDiagnostics=0 \
     ASPNETCORE_HTTP_PORTS=7070
-
-# 🔥 Add grpc_health_probe HERE
-USER root
-ENV GRPC_HEALTH_PROBE_VERSION=v0.4.24
-
-RUN wget -qO /bin/grpc_health_probe \
-    https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
-    chmod +x /bin/grpc_health_probe
 
 # Back to non-root (security)
 USER 1000
