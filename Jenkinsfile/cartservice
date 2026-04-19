@@ -80,7 +80,7 @@ pipeline {
                         --scan ./
                         --format XML
                         --out dependency-check-report.xml
-                        --nvdApiKey a7e33b93-d1da-4eb7-a8ba-c8ff85c70a66
+                        --nvdApiKey ${NVD_API_KEY}
                     ''',
                     odcInstallation: 'dp-check'
                 }
