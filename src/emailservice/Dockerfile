@@ -61,7 +61,7 @@ COPY --from=builder /bin/grpc_health_probe /bin/grpc_health_probe
 COPY . .
 
 # Fix permissions + drop root
-RUN chown -R 1000:1000 /recommendationservice
+RUN chown -R 1000:1000 /email_server
 USER 1000
 
 EXPOSE 8080
