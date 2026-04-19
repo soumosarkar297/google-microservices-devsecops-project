@@ -49,7 +49,7 @@ FROM mcr.microsoft.com/dotnet/runtime-deps:10.0.0-noble-chiseled@sha256:b857c8cb
 WORKDIR /app
 
 COPY --from=builder /cartservice .
-COPY --from=builder /grpc_health_probe /bin/grpc_health_probe
+COPY --from=builder /bin/grpc_health_probe /bin/grpc_health_probe
 
 EXPOSE 7070
 
