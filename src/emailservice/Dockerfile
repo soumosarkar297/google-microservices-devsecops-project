@@ -23,7 +23,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 RUN apk update \
-    && apk add --no-cache g++ linux-headers \
+    && apk add --no-cache g++ linux-headers wget \
     && rm -rf /var/cache/apk/*
 
 # Download the grpc health probe
@@ -32,9 +32,10 @@ ENV GRPC_HEALTH_PROBE_VERSION=v0.4.24
 RUN wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
     chmod +x /bin/grpc_health_probe
 
-# get packages
+# Install dependencies
+WORKDIR /install
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 FROM base
 
@@ -53,8 +54,15 @@ WORKDIR /email_server
 # Grab packages from builder
 COPY --from=builder /usr/local/lib/python3.14/ /usr/local/lib/python3.14/
 
+# Copy grpc_health_probe
+COPY --from=builder /bin/grpc_health_probe /bin/grpc_health_probe
+
 # Add the application
 COPY . .
+
+# Fix permissions + drop root
+RUN chown -R 1000:1000 /recommendationservice
+USER 1000
 
 EXPOSE 8080
 ENTRYPOINT [ "python", "email_server.py" ]
