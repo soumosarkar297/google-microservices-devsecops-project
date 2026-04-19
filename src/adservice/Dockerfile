@@ -41,4 +41,6 @@ WORKDIR /app
 COPY --from=builder /app .
 
 EXPOSE 9555
+
+USER 1001
 ENTRYPOINT ["/app/build/install/hipstershop/bin/AdService"]
