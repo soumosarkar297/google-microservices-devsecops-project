@@ -60,26 +60,26 @@ pipeline {
             }
         }
 
-          stage("OWASP FS Scan") {
+        stage("OWASP FS Scan") {
             steps {
                 dir('src/paymentservice') {
-                dependencyCheck additionalArguments: '''
-                    --scan ./
-                    --disableYarnAudit
-                    --disableNodeAudit
+                    dependencyCheck additionalArguments: '''
+                        --scan ./
+                        --disableYarnAudit
+                        --disableNodeAudit
 
-                   ''',
-                odcInstallation: 'dp-check'
+                    ''',
+                    odcInstallation: 'dp-check'
 
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                }
             }
-        }
-                    post {
+            post {
                 always {
                     archiveArtifacts 'src/paymentservice/dependency-check-report.xml'
                 }
             }
-          }
+        }
 
         // --- Trivy FS Scan ---
         stage("Trivy File Scan") {
