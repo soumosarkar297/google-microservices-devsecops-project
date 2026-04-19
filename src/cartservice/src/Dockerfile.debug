@@ -26,13 +26,18 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:a04d1c1d2d26119049494057d80ea6c
 # Installing procps on the container to enable debugging of .NET Core
 # renovate: datasource=github-releases depName=grpc-ecosystem/grpc-health-probe
 ENV GRPC_HEALTH_PROBE_VERSION=v0.4.24
-RUN apt-get update \
-    && apt-get install -y unzip procps wget \
-    && wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
-    chmod +x /bin/grpc_health_probe
+RUN apt-get update && \
+    apt-get install -y wget && \
+    wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
+    chmod +x /bin/grpc_health_probe && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=publish /out .
+
 ENV ASPNETCORE_HTTP_PORTS=7070
+
+# Run as non-root
+USER 1000
 
 ENTRYPOINT ["dotnet", "cartservice.dll"]

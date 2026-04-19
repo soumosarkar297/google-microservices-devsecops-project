@@ -37,16 +37,21 @@ FROM mcr.microsoft.com/dotnet/runtime-deps:10.0.0-noble-chiseled@sha256:b857c8cb
 
 WORKDIR /app
 COPY --from=builder /cartservice .
+
 EXPOSE 7070
+
 ENV DOTNET_EnableDiagnostics=0 \
     ASPNETCORE_HTTP_PORTS=7070
-USER 1000
-ENTRYPOINT ["/app/cartservice"]
 
-FROM without-grpc-health-probe-bin
+# 🔥 Add grpc_health_probe HERE
 USER root
-# renovate: datasource=github-releases depName=grpc-ecosystem/grpc-health-probe
 ENV GRPC_HEALTH_PROBE_VERSION=v0.4.24
-RUN wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
+
+RUN wget -qO /bin/grpc_health_probe \
+    https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
     chmod +x /bin/grpc_health_probe
+
+# Back to non-root (security)
 USER 1000
+
+ENTRYPOINT ["/app/cartservice"]

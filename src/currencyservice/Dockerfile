@@ -40,13 +40,17 @@ COPY --from=builder /usr/src/app/node_modules ./node_modules
 
 COPY . .
 
+# ✅ Add grpc_health_probe
+ENV GRPC_HEALTH_PROBE_VERSION=v0.4.24
+ADD https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 /bin/grpc_health_probe
+
+# Make it executable
+RUN chmod +x /bin/grpc_health_probe && \
+    chown -R 1000:1000 /usr/src/app
+
+# Run as non-root
+USER 1000
+
 EXPOSE 7000
 
 ENTRYPOINT [ "node", "server.js" ]
-
-FROM without-grpc-health-probe-bin
-
-# renovate: datasource=github-releases depName=grpc-ecosystem/grpc-health-probe
-ENV GRPC_HEALTH_PROBE_VERSION=v0.4.24
-RUN wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
-    chmod +x /bin/grpc_health_probe

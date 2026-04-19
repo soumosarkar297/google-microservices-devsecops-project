@@ -29,10 +29,18 @@ COPY . .
 ARG SKAFFOLD_GO_GCFLAGS
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags="-s -w" -gcflags="${SKAFFOLD_GO_GCFLAGS}" -o /productcatalogservice .
 
+# ✅ Add grpc_health_probe
+ENV GRPC_HEALTH_PROBE_VERSION=v0.4.24
+ADD https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 /bin/grpc_health_probe
+
+# Make it executable
+RUN chmod +x /bin/grpc_health_probe
+
 FROM gcr.io/distroless/static
 
 WORKDIR /src
 COPY --from=builder /productcatalogservice ./server
+COPY --from=builder /bin/grpc_health_probe /bin/grpc_health_probe
 COPY products.json .
 
 # Definition of this variable is used by 'skaffold debug' to identify a golang binary.
@@ -41,11 +49,8 @@ COPY products.json .
 ENV GOTRACEBACK=single
 
 EXPOSE 3550
+
+# distroless already has nonroot user
+USER nonroot
+
 ENTRYPOINT ["/src/server"]
-
-FROM without-grpc-health-probe-bin
-
-# renovate: datasource=github-releases depName=grpc-ecosystem/grpc-health-probe
-ENV GRPC_HEALTH_PROBE_VERSION=v0.4.24
-RUN wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
-    chmod +x /bin/grpc_health_probe
