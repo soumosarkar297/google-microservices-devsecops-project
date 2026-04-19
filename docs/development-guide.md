@@ -1,17 +1,19 @@
-# Development Guide 
+# Development Guide
 
-This doc explains how to build and run the Online Boutique source code locally using the `skaffold` command-line tool.  
+This doc explains how to build and run the Online Boutique source code locally using the `skaffold` command-line tool.
 
 ## Prerequisites
 
 - [Docker for Desktop](https://www.docker.com/products/docker-desktop)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) (can be installed via `gcloud components install kubectl` for Option 1 - GKE)
-- [skaffold **2.0.2+**](https://skaffold.dev/docs/install/) (latest version recommended), a tool that builds and deploys Docker images in bulk. 
+- [skaffold **2.0.2+**](https://skaffold.dev/docs/install/) (latest version recommended), a tool that builds and deploys Docker images in bulk.
 - Clone the repository.
+
     ```sh
     git clone https://github.com/GoogleCloudPlatform/microservices-demo
     cd microservices-demo/
     ```
+
 - A Google Cloud project with Google Container Registry enabled. (for Option 1 - GKE)
 - [Minikube](https://minikube.sigs.k8s.io/docs/start/) (optional for Option 2 - Local Cluster)
 - [Kind](https://kind.sigs.k8s.io/) (optional for Option 2 - Local Cluster)
@@ -19,10 +21,10 @@ This doc explains how to build and run the Online Boutique source code locally u
 ## Option 1: Google Kubernetes Engine (GKE)
 
 > 💡 Recommended if you're using Google Cloud and want to try it on
-> a realistic cluster. **Note**: If your cluster has Workload Identity enabled, 
+> a realistic cluster. **Note**: If your cluster has Workload Identity enabled,
 > [see these instructions](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity#enable)
 
-1.  Create a Google Kubernetes Engine cluster and make sure `kubectl` is pointing
+1. Create a Google Kubernetes Engine cluster and make sure `kubectl` is pointing
     to the cluster.
 
     ```sh
@@ -33,11 +35,11 @@ This doc explains how to build and run the Online Boutique source code locally u
     gcloud container clusters create-auto demo --region=us-central1
     ```
 
-    ```
+    ```sh
     kubectl get nodes
     ```
 
-2.  Enable Artifact Registry (AR) on your GCP project and configure the
+2. Enable Artifact Registry (AR) on your GCP project and configure the
     `docker` CLI to authenticate to AR:
 
     ```sh
@@ -51,15 +53,15 @@ This doc explains how to build and run the Online Boutique source code locally u
     ```
 
     ```sh
-    gcloud auth configure-docker -q 
+    gcloud auth configure-docker -q
     ```
 
-3.  In the root of this repository, run:
+3. In the root of this repository, run:
 
-    ```
+    ```sh
     skaffold run --default-repo=us-docker.pkg.dev/PROJECT_ID/microservices-demo
     ```
-    
+
     Where `PROJECT_ID` is replaced by your Google Cloud project ID.
 
     This command:
@@ -75,14 +77,14 @@ This doc explains how to build and run the Online Boutique source code locally u
     API](https://console.cloud.google.com/flows/enableapi?apiid=cloudbuild.googleapis.com),
     then run `skaffold run -p gcb --default-repo=us-docker.pkg.dev/[PROJECT_ID]/microservices-demo` instead.
 
-4.  Find the IP address of your application, then visit the application on your
+4. Find the IP address of your application, then visit the application on your
     browser to confirm installation.
 
         kubectl get service frontend-external
 
-5.  Navigate to `http://EXTERNAL-IP` to access the web frontend.
+5. Navigate to `http://EXTERNAL-IP` to access the web frontend.
 
-## Option 2 - Local Cluster 
+## Option 2 - Local Cluster
 
 1. Launch a local Kubernetes cluster with one of the following tools:
 
