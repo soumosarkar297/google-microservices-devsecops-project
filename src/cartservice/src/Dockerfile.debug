@@ -24,8 +24,13 @@ RUN dotnet publish cartservice.csproj -c Debug -o /out
 # Building final image used in running container
 FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:a04d1c1d2d26119049494057d80ea6cda25bbd8aef7c444a1fc1ef874fd3955b AS final
 # Installing procps on the container to enable debugging of .NET Core
+# renovate: datasource=github-releases depName=grpc-ecosystem/grpc-health-probe
+ENV GRPC_HEALTH_PROBE_VERSION=v0.4.24
 RUN apt-get update \
-    && apt-get install -y unzip procps wget
+    && apt-get install -y unzip procps wget \
+    && wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
+    chmod +x /bin/grpc_health_probe
+
 WORKDIR /app
 COPY --from=publish /out .
 ENV ASPNETCORE_HTTP_PORTS=7070
