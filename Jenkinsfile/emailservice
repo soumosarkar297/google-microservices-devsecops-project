@@ -82,7 +82,7 @@ pipeline {
             steps {
                 dir('src/emailservice') {
                     sh '''
-                    python3 -m pip install --user safety
+                    python3 -m pip install safety
                     safety check --full-report --output json > safety-report.json || true
                     '''
                 }
