@@ -1,16 +1,9 @@
-<!-- <p align="center">
-<img src="/src/frontend/static/icons/Hipster_HeroLogoMaroon.svg" width="300" alt="Online Boutique" />
-</p> -->
-![Continuous Integration](https://github.com/GoogleCloudPlatform/microservices-demo/workflows/Continuous%20Integration%20-%20Main/Release/badge.svg)
+# Online E-commerce Website and 11 Microservices DevSecOps Project with K8s, Gitops
 
 **Online Boutique** is a cloud-first microservices demo application.  The application is a
 web-based e-commerce app where users can browse items, add them to the cart, and purchase them.
 
-Google uses this application to demonstrate how developers can modernize enterprise applications using Google Cloud products, including: [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine), [Cloud Service Mesh (CSM)](https://cloud.google.com/service-mesh), [gRPC](https://grpc.io/), [Cloud Operations](https://cloud.google.com/products/operations), [Spanner](https://cloud.google.com/spanner), [Memorystore](https://cloud.google.com/memorystore), [AlloyDB](https://cloud.google.com/alloydb), and [Gemini](https://ai.google.dev/). This application works on any Kubernetes cluster.
-
 If you’re using this demo, please **★Star** this repository to show your interest!
-
-**Note to Googlers:** Please fill out the form at [go/microservices-demo](http://go/microservices-demo).
 
 ## Architecture
 
@@ -22,148 +15,830 @@ microservices](/docs/img/architecture-diagram.png)](/docs/img/architecture-diagr
 
 Find **Protocol Buffers Descriptions** at the [`./protos` directory](/protos).
 
-| Service                                              | Language      | Description                                                                                                                       |
-| ---------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Service                                             | Language      | Description                                                                                                                       |
+| --------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | [frontend](/src/frontend)                           | Go            | Exposes an HTTP server to serve the website. Does not require signup/login and generates session IDs for all users automatically. |
-| [cartservice](/src/cartservice)                     | C#            | Stores the items in the user's shopping cart in Redis and retrieves it.                                                           |
 | [productcatalogservice](/src/productcatalogservice) | Go            | Provides the list of products from a JSON file and ability to search products and get individual products.                        |
+| [shippingservice](/src/shippingservice)             | Go            | Gives shipping cost estimates based on the shopping cart. Ships items to the given address (mock)                                 |
+| [checkoutservice](/src/checkoutservice)             | Go            | Retrieves user cart, prepares order and orchestrates the payment, shipping and the email notification.                            |
+| [cartservice](/src/cartservice)                     | C#            | Stores the items in the user's shopping cart in Redis and retrieves it.                                                           |
 | [currencyservice](/src/currencyservice)             | Node.js       | Converts one money amount to another currency. Uses real values fetched from European Central Bank. It's the highest QPS service. |
 | [paymentservice](/src/paymentservice)               | Node.js       | Charges the given credit card info (mock) with the given amount and returns a transaction ID.                                     |
-| [shippingservice](/src/shippingservice)             | Go            | Gives shipping cost estimates based on the shopping cart. Ships items to the given address (mock)                                 |
 | [emailservice](/src/emailservice)                   | Python        | Sends users an order confirmation email (mock).                                                                                   |
-| [checkoutservice](/src/checkoutservice)             | Go            | Retrieves user cart, prepares order and orchestrates the payment, shipping and the email notification.                            |
 | [recommendationservice](/src/recommendationservice) | Python        | Recommends other products based on what's given in the cart.                                                                      |
-| [adservice](/src/adservice)                         | Java          | Provides text ads based on given context words.                                                                                   |
 | [loadgenerator](/src/loadgenerator)                 | Python/Locust | Continuously sends requests imitating realistic user shopping flows to the frontend.                                              |
+| [adservice](/src/adservice)                         | Java          | Provides text ads based on given context words.                                                                                   |
 
 ## Screenshots
 
-| Home Page                                                                                                         | Checkout Screen                                                                                                    |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Home Page                                                                                                             | Checkout Screen                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | [![Screenshot of store homepage](/docs/img/online-boutique-frontend-1.png)](/docs/img/online-boutique-frontend-1.png) | [![Screenshot of checkout screen](/docs/img/online-boutique-frontend-2.png)](/docs/img/online-boutique-frontend-2.png) |
 
-## Quickstart (GKE)
+---
 
-1. Ensure you have the following requirements:
-   - [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects#creating_a_project).
-   - Shell environment with `gcloud`, `git`, and `kubectl`.
+## Table of Contents
 
-2. Clone the latest major version.
+- [Prerequisites](#prerequisites)
+- [System Update & Common Packages](#system-update--common-packages)
+- [Java](#java)
+- [Jenkins](#jenkins)
+- [Docker](#docker)
+- [Trivy](#trivy-vulnerability-scanner)
+- [Jenkins Plugins to Install](#jenkins-plugins-to-install)
+- [Jenkins Tools Configuration](#jenkins-tools-configuration)
+- [Jenkins Credentials to Store](#jenkins-credentials-to-store)
+- [Jenkins System Configuration](#jenkins-system-configuration)
+- [EKS Cluster Setup and ALB Ingress Kubernetes Setup Guide](#eks-cluster-setup-and-alb-ingress-kubernetes-setup-guide)
+- [Monitor Kubernetes with Prometheus](#monitor-kubernetes-with-prometheus)
+- [Installing Argo CD on the EKS Cluster](#installing-argo-cd-on-the-eks-cluster)
+- [Notes and Recommendations](#notes-and-recommendations)
 
-   ```sh
-   git clone --depth 1 --branch v0 https://github.com/GoogleCloudPlatform/microservices-demo.git
-   cd microservices-demo/
-   ```
+---
 
-   The `--depth 1` argument skips downloading git history.
+## Prerequisites
 
-3. Set the Google Cloud project and region and ensure the Google Kubernetes Engine API is enabled.
+### Create EC2 Instance for jenkins
 
-   ```sh
-   export PROJECT_ID=<PROJECT_ID>
-   export REGION=us-central1
-   gcloud services enable container.googleapis.com \
-     --project=${PROJECT_ID}
-   ```
+- **Instance Type:** c5.xlarge
+- **Volume Size:** 50 GiB
 
-   Substitute `<PROJECT_ID>` with the ID of your Google Cloud project.
+> This guide assumes an Ubuntu/Debian-like environment and sudo privileges.
 
-4. Create a GKE cluster and get the credentials for it.
+### Ports to Enable in Security Group
 
-   ```sh
-   gcloud container clusters create-auto online-boutique \
-     --project=${PROJECT_ID} --region=${REGION}
-   ```
+| Service         | Port  |
+|-----------------|-------|
+| HTTP            | 80    |
+| HTTPS           | 443   |
+| SSH             | 22    |
+| Jenkins         | 8080  |
+| SonarQube       | 9000  |
 
-   Creating the cluster may take a few minutes.
+---
 
-5. Deploy Online Boutique to the cluster.
+## System Update & Common Packages
 
-   ```sh
-   kubectl apply -f ./release/kubernetes-manifests.yaml
-   ```
+```bash
+sudo apt update
+sudo apt upgrade -y
 
-6. Wait for the pods to be ready.
+# Check starting disk space
+df -h
+```
 
-   ```sh
-   kubectl get pods
-   ```
+### Starting Disk space
 
-   After a few minutes, you should see the Pods in a `Running` state:
+```txt
+Filesystem       Size  Used Avail Use% Mounted on
+/dev/root         48G  2.3G   46G   5% /
+```
 
-   ```
-   NAME                                     READY   STATUS    RESTARTS   AGE
-   adservice-76bdd69666-ckc5j               1/1     Running   0          2m58s
-   cartservice-66d497c6b7-dp5jr             1/1     Running   0          2m59s
-   checkoutservice-666c784bd6-4jd22         1/1     Running   0          3m1s
-   currencyservice-5d5d496984-4jmd7         1/1     Running   0          2m59s
-   emailservice-667457d9d6-75jcq            1/1     Running   0          3m2s
-   frontend-6b8d69b9fb-wjqdg                1/1     Running   0          3m1s
-   loadgenerator-665b5cd444-gwqdq           1/1     Running   0          3m
-   paymentservice-68596d6dd6-bf6bv          1/1     Running   0          3m
-   productcatalogservice-557d474574-888kr   1/1     Running   0          3m
-   recommendationservice-69c56b74d4-7z8r5   1/1     Running   0          3m1s
-   redis-cart-5f59546cdd-5jnqf              1/1     Running   0          2m58s
-   shippingservice-6ccc89f8fd-v686r         1/1     Running   0          2m58s
-   ```
+### End of the Project Disk space
 
-7. Access the web frontend in a browser using the frontend's external IP.
+```txt
+Filesystem       Size  Used Avail Use% Mounted on
+/dev/root         48G   35G   14G  72% /
+```
 
-   ```sh
-   kubectl get service frontend-external | awk '{print $4}'
-   ```
+### Install Common tools
 
-   Visit `http://EXTERNAL_IP` in a web browser to access your instance of Online Boutique.
+```bash
+sudo apt install -y bash-completion wget git zip unzip curl jq net-tools build-essential ca-certificates apt-transport-https gnupg fontconfig
+```
 
-8. Congrats! You've deployed the default Online Boutique. To deploy a different variation of Online Boutique (e.g., with Google Cloud Operations tracing, Istio, etc.), see [Deploy Online Boutique variations with Kustomize](#deploy-online-boutique-variations-with-kustomize).
+**Reload bash completion if needed:**
 
-9. Once you are done with it, delete the GKE cluster.
+```bash
+source /etc/bash_completion
+```
 
-   ```sh
-   gcloud container clusters delete online-boutique \
-     --project=${PROJECT_ID} --region=${REGION}
-   ```
+**Install latest Git:**
 
-   Deleting the cluster may take a few minutes.
+```bash
+sudo add-apt-repository ppa:git-core/ppa
+sudo apt update
+sudo apt install git -y
+```
 
-## Additional deployment options
+---
 
-- **Terraform**: [See these instructions](/terraform) to learn how to deploy Online Boutique using [Terraform](https://www.terraform.io/intro).
-- **Istio / Cloud Service Mesh**: [See these instructions](/kustomize/components/service-mesh-istio/README.md) to deploy Online Boutique alongside an Istio-backed service mesh.
-- **Non-GKE clusters (Minikube, Kind, etc)**: See the [Development guide](/docs/development-guide.md) to learn how you can deploy Online Boutique on non-GKE clusters.
-- **AI assistant using Gemini**: [See these instructions](/kustomize/components/shopping-assistant/README.md) to deploy a Gemini-powered AI assistant that suggests products to purchase based on an image.
-- **And more**: The [`/kustomize` directory](/kustomize) contains instructions for customizing the deployment of Online Boutique with other variations.
+## Java
 
-## Documentation
+Install OpenJDK (choose 17 or 21 depending on your needs):
 
-- [Development](/docs/development-guide.md) to learn how to run and develop this app locally.
+```bash
+# OpenJDK 17
+sudo apt install -y openjdk-17-jdk
 
-## Demos featuring Online Boutique
+# OR OpenJDK 21
+sudo apt install -y openjdk-21-jdk
+```
 
-- [Security hardening of the OnlineBoutique sample apps with the Docker Hardened Images (DHI)](https://medium.com/google-cloud/security-hardening-of-the-onlineboutique-sample-apps-with-docker-hardened-images-dhi-ca1fad348343)
-- [alpine, distroless or scratch?](https://medium.com/google-cloud/alpine-distroless-or-scratch-caac35250e0b)
-- [Platform Engineering in action: Deploy the Online Boutique sample apps with Score and Humanitec](https://medium.com/p/d99101001e69)
-- [The new Kubernetes Gateway API with Istio and Anthos Service Mesh (ASM)](https://medium.com/p/9d64c7009cd)
-- [Use Azure Redis Cache with the Online Boutique sample on AKS](https://medium.com/p/981bd98b53f8)
-- [Sail Sharp, 8 tips to optimize and secure your .NET containers for Kubernetes](https://medium.com/p/c68ba253844a)
-- [Deploy multi-region application with Anthos and Google cloud Spanner](https://medium.com/google-cloud/a2ea3493ed0)
-- [Use Google Cloud Memorystore (Redis) with the Online Boutique sample on GKE](https://medium.com/p/82f7879a900d)
-- [Use Helm to simplify the deployment of Online Boutique, with a Service Mesh, GitOps, and more!](https://medium.com/p/246119e46d53)
-- [How to reduce microservices complexity with Apigee and Anthos Service Mesh](https://cloud.google.com/blog/products/application-modernization/api-management-and-service-mesh-go-together)
-- [gRPC health probes with Kubernetes 1.24+](https://medium.com/p/b5bd26253a4c)
-- [Use Google Cloud Spanner with the Online Boutique sample](https://medium.com/p/f7248e077339)
-- [Seamlessly encrypt traffic from any apps in your Mesh to Memorystore (redis)](https://medium.com/google-cloud/64b71969318d)
-- [Strengthen your app's security with Cloud Service Mesh and Anthos Config Management](https://cloud.google.com/service-mesh/docs/strengthen-app-security)
-- [From edge to mesh: Exposing service mesh applications through GKE Ingress](https://cloud.google.com/architecture/exposing-service-mesh-apps-through-gke-ingress)
-- [Take the first step toward SRE with Cloud Operations Sandbox](https://cloud.google.com/blog/products/operations/on-the-road-to-sre-with-cloud-operations-sandbox)
-- [Deploying the Online Boutique sample application on Cloud Service Mesh](https://cloud.google.com/service-mesh/docs/onlineboutique-install-kpt)
-- [Anthos Service Mesh Workshop: Lab Guide](https://codelabs.developers.google.com/codelabs/anthos-service-mesh-workshop)
-- [KubeCon EU 2019 - Reinventing Networking: A Deep Dive into Istio's Multicluster Gateways - Steve Dake, Independent](https://youtu.be/-t2BfT59zJA?t=982)
-- Google Cloud Next'18 SF
-  - [Day 1 Keynote](https://youtu.be/vJ9OaAqfxo4?t=2416) showing GKE On-Prem
-  - [Day 3 Keynote](https://youtu.be/JQPOPV_VH5w?t=815) showing Stackdriver
-    APM (Tracing, Code Search, Profiler, Google Cloud Build)
-  - [Introduction to Service Management with Istio](https://www.youtube.com/watch?v=wCJrdKdD6UM&feature=youtu.be&t=586)
-- [Google Cloud Next'18 London – Keynote](https://youtu.be/nIq2pkNcfEI?t=3071)
-  showing Stackdriver Incident Response Management
-- [Microservices demo showcasing Go Micro](https://github.com/go-micro/demo)
+**Verify Java installation:**
+
+```bash
+java --version
+```
+
+---
+
+## Jenkins
+
+Please follow [Official docs for installing Jenkins on Ubuntu](https://www.jenkins.io/doc/book/installing/linux/#debianubuntu)
+
+```bash
+sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
+  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+
+sudo apt update
+sudo apt install -y jenkins
+sudo systemctl enable --now jenkins
+sudo systemctl start jenkins
+sudo systemctl status jenkins
+```
+
+**Initial admin password:**
+
+```bash
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+```
+
+> Then open: <http://your-server-public-ip:8080>
+
+**Note:** Jenkins requires a compatible Java runtime. Check the Jenkins documentation for supported Java versions.
+
+---
+
+## Docker
+
+Please check [Official docs for installing Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
+
+```bash
+# Add Docker's official GPG key:
+sudo apt update
+sudo apt install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the repository to Apt sources:
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+
+sudo apt update
+
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Add user to docker group (log out / in or newgrp to apply)
+sudo usermod -aG docker $USER
+newgrp docker
+docker ps
+```
+
+### If Jenkins needs Docker access
+
+```bash
+sudo usermod -aG docker jenkins
+newgrp docker
+sudo systemctl restart jenkins
+```
+
+**Check Docker status:**
+
+```bash
+sudo systemctl status docker
+```
+
+---
+
+## Trivy (Vulnerability Scanner)
+
+Check [Official Docs for Trivy installation](https://trivy.dev/docs/latest/getting-started/installation/#debianubuntu-official)
+
+```bash
+sudo apt-get install wget gnupg
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+sudo apt-get update
+sudo apt-get install -y trivy
+
+# Now trivy commands are available
+trivy --version
+```
+
+---
+
+## Python Package Installation in the Ubuntu AMI [ Preinstalled 3.12 ]
+
+## Choose python3.10 for Jenkins pipeline
+
+```bash
+# 1. Update package list
+sudo apt update
+
+# 2. Install required dependencies for adding a new Python version
+sudo apt install -y software-properties-common
+
+# 3. Add the deadsnakes PPA (Personal Package Archive) to get newer Python versions
+sudo add-apt-repository ppa:deadsnakes/ppa -y
+sudo apt update
+
+# 4. Install the specific version of Python you want
+sudo apt install -y python3.10 python3.10-venv python3.10-distutils python3.10-dev
+
+curl -sS https://bootstrap.pypa.io/get-pip.py | sudo python3.10
+
+
+ls /usr/bin/python3*
+
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 2
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
+
+sudo update-alternatives --config python3
+```
+
+### If your using the Plan VM
+
+```bash
+sudo apt-get update
+sudo apt install -y python3.10 python3.10-venv python3.10-distutils python3.10-dev
+```
+
+---
+
+## Jenkins Plugins to Install
+
+`Manage Jenkins > Plugins > Available plugins`
+
+- Eclipse Temurin Installer
+- NodeJS
+- Go
+- .NET SDK Support
+- Pipeline: Stage View
+- Email Extension Template
+- OWASP Dependency-Check
+- SonarQube Scanner
+- Pyenv Pipeline
+
+---
+
+## SonarQube Docker Container Run for Analysis
+
+The SonarQube docker version is taken from Official GitHub repo: [SonarSource/docker-sonarqube](https://github.com/SonarSource/docker-sonarqube/blob/master/community-build/Dockerfile)
+
+```bash
+docker run -d --name sonarqube \
+  -p 9000:9000 \
+  -v sonarqube_data:/opt/sonarqube/data \
+  -v sonarqube_logs:/opt/sonarqube/logs \
+  -v sonarqube_extensions:/opt/sonarqube/extensions \
+  sonarqube:26.4.0.121862-community
+```
+
+---
+
+## Create App Password
+
+1. Go to your Gmail Account > **Manage your Google Account**
+2. Search "App Passwords"
+3. Create a new app specific password
+4. Keep the Generated app password: `abcdefghijklmnop`
+
+---
+
+## Generate Token for SonarQube Administrator
+
+### Login to SonarQube
+
+- Default Login/username: `admin`
+- Default Password: `admin`
+- Update your password (e.g., `Password_123`)
+
+### Generate Token
+
+1. Go to Administration > **Security** > **Users**
+2. Click on Tokens 3 dot (Update tokens)
+3. Store generated Token: `squ_691d4cd3`
+
+### Setup Jenkins Webhook in SonarQube
+
+1. Go to Administration > **Configuration** > **Webhooks**
+2. **Name:** jenkins
+3. **URL:** `http://<jenkins-ip>:8080/sonarqube-webhook/`
+
+---
+
+## Create Docker Hub Personal access token
+
+1. Log in to your Docker Hub account
+2. Account Settings > Personal access tokens > Generate new token
+3. **Access token description:** jenkins
+4. **Expiration date:** 30 days
+5. **Access permissions:** Read, Write, Delete
+
+### To use the access token from your Docker CLI client
+
+1. Run: `docker login -u supersection`
+2. At the password prompt, enter the personal access token.
+
+    ```txt
+    dckr_pat_SECRET
+    ```
+
+---
+
+## Jenkins Tools Configuration
+
+- JDK [ `jdk17` , `jdk21` ]
+  1. Install from adoptium.net: `jdk-17+35` (latest jdk-17)
+  2. Install from adoptium.net: `jdk-21+35` (latest jdk-21)
+
+- SonarQube Scanner installations [ `sonar-scanner` ]
+
+- Node [ `node16` , `node20` ]
+  1. Install from nodejs.org: `NodeJS 16.20.2` (latest v20)
+  2. Install from nodejs.org: `NodeJS 20.20.2` (latest v20)
+
+- Dependency-Check installations [ `dp-check` ]
+  - "Install automatically" > Install from github.com (latest)
+
+- Go [ `go1.25` ]
+  - Install from golang.org: `Go 1.25.9` (latest v1.25)
+
+- .NET SDK installations [ `dotnet9` ]
+  - Install from microsoft.com: `NodeJS 16.20.2`
+  - No Label
+  - .NET 9.0 - Status Unknown (end of support: 2026-11-10)
+  - 9.0.15, released 2026-04-14 (includes security fixes)
+  - 9.0.313
+  - linux-x64 (Linux - x64)
+
+---
+
+## Jenkins Credentials to Store
+
+`Manage Jenkins > Credentials > Global > Add Credentials`
+
+| Purpose       | ID            | Type                    | Notes                            |
+|---------------|---------------|-------------------------|----------------------------------|
+| Email         | mail-cred     | Username / app password | From Manage your Gmail account   |
+| SonarQube     | sonar-token   | Secret text             | From SonarQube application       |
+| Docker Hub    | docker-cred   | Secret text             | From your Docker Hub profile     |
+| Docker Hub    | nvd-api-key   | Secret text             | From NIST, Get NVD API Key       |
+
+For Dependency Check config, [Get NVD API Key](https://nvd.nist.gov/developers/request-an-api-key)
+
+---
+
+## Jenkins System Configuration
+
+From: `Manage Jenkins > System`
+
+### SonarQube servers
+
+- **Name:** `sonar-server`
+- **Server URL:** <http://sonar-ip-address:9000>
+- **Server authentication toke**: Add from Jenkins credentials (`sonar-token`)
+
+### Extended E-mail Notification
+
+- **SMTP server:** `smtp.gmail.com`
+- **SMTP Port:** 465
+- **Advanced:**
+  - Credentials: (`mail-cred`)
+  - Use SSL
+- **Default user e-mail suffix:** `@gmail.com`
+
+### E-mail Notification
+
+- **SMTP server:** `smtp.gmail.com`
+- **Default user e-mail suffix:** @gmail.com
+- **Advanced:**
+  - ✓ *Use SMTP Authentication*
+    - **User Name:** <soumosarkar.official@gmail.com>
+    - **Password:** Use app password
+  - ✓ *Use TLS*
+  - **SMTP Port:** 587
+  - **Reply-To Address:** <soumosarkar.official@gmail.com>
+
+---
+
+## EKS Cluster Setup and ALB Ingress Kubernetes Setup Guide
+
+This guide covers the installation and setup for AWS CLI, `kubectl`, `eksctl`, and `helm`, and creating/configuring an EKS cluster with AWS Load Balancer Controller.
+
+---
+
+### 1. AWS CLI Installation
+
+Refer: [AWS CLI Installation Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+
+```bash
+sudo apt install -y unzip
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+
+sudo -r awscliv2.zip
+```
+
+---
+
+### 2. kubectl Installation
+
+Refer: [kubectl Installation Guide](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/)
+
+```bash
+sudo apt-get update
+# apt-transport-https may be a dummy package; if so, you can skip that package
+sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
+
+# If the folder `/etc/apt/keyrings` does not exist, it should be created before the curl command, read the note below.
+# sudo mkdir -p -m 755 /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.35/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg # allow unprivileged APT programs to read this keyring
+
+# This overwrites any existing configuration in /etc/apt/sources.list.d/kubernetes.list
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.35/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo chmod 644 /etc/apt/sources.list.d/kubernetes.list   # helps tools such as command-not-found to work correctly
+
+sudo apt-get update
+sudo apt-get install -y kubectl bash-completion
+
+# Enable kubectl auto-completion
+echo 'source <(kubectl completion bash)' >> ~/.bashrc
+echo 'alias k=kubectl' >> ~/.bashrc
+echo 'complete -F __start_kubectl k' >> ~/.bashrc
+
+# Apply changes immediately
+source ~/.bashrc
+```
+
+---
+
+### 3. eksctl Installation
+
+Refer: [eksctl Installation Guide](docs.aws.amazon.com/eks/latest/eksctl/installation.html)
+
+```bash
+# for ARM systems, set ARCH to: `arm64`, `armv6` or `armv7`
+ARCH=amd64
+PLATFORM=$(uname -s)_$ARCH
+
+curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_$PLATFORM.tar.gz"
+
+# (Optional) Verify checksum
+curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_checksums.txt" | grep $PLATFORM | sha256sum --check
+
+tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
+
+sudo install -m 0755 /tmp/eksctl /usr/local/bin && rm /tmp/eksctl
+
+# Install bash completion
+sudo apt-get install -y bash-completion
+
+# Enable eksctl auto-completion
+echo 'source <(eksctl completion bash)' >> ~/.bashrc
+echo 'alias e=eksctl' >> ~/.bashrc
+echo 'complete -F __start_eksctl e' >> ~/.bashrc
+
+# Apply changes immediately
+source ~/.bashrc
+```
+
+---
+
+### 4. Helm Installation
+
+Refer: [Helm Installation Guide](https://helm.sh/docs/intro/install/)
+
+```bash
+sudo apt-get install curl gpg apt-transport-https --yes
+curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get update
+sudo apt-get install helm bash-completion
+
+# Enable Helm auto-completion
+echo 'source <(helm completion bash)' >> ~/.bashrc
+echo 'alias h=helm' >> ~/.bashrc
+echo 'complete -F __start_helm h' >> ~/.bashrc
+
+# Apply changes immediately
+source ~/.bashrc
+```
+
+---
+
+### 5. Create IAM User Access Key
+
+1. AWS Console > IAM > Users
+2. Select or Create an user having "AdministratorAccess" Permission
+3. Security credentials > Access keys > Create access key
+4. **Use case:** Command Line Interface (CLI)
+5. Save and use **Access Key ID** and **Secret Access Key**
+
+### 6. AWS CLI Configuration
+
+```bash
+aws configure
+aws configure list
+```
+
+---
+
+### 7. Create EKS Cluster and Nodegroup (Try-This)
+
+```bash
+eksctl create cluster \
+  --name my-cluster \
+  --region us-east-1 \
+  --version 1.35 \
+  --without-nodegroup
+
+eksctl create nodegroup \
+  --cluster my-cluster \
+  --name my-nodes-ng \
+  --nodes 3 \
+  --nodes-min 3 \
+  --nodes-max 6 \
+  --node-type t3.medium
+```
+
+---
+
+### 8. Update kubeconfig
+
+```bash
+aws eks update-kubeconfig --name my-cluster --region us-east-1
+```
+
+---
+
+### 9. Associate IAM OIDC Provider
+
+```bash
+eksctl utils associate-iam-oidc-provider --cluster my-cluster --approve
+```
+
+---
+
+### 10. Create IAM Policy for AWS Load Balancer Controller
+
+New policy link: [AWS EKS LBC Policy](https://docs.aws.amazon.com/eks/latest/userguide/lbc-manifest.html)
+
+```bash
+curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.14.1/docs/install/iam_policy.json
+
+aws iam create-policy \
+  --policy-name AWSLoadBalancerControllerIAMPolicy \
+  --policy-document file://iam_policy.json
+```
+
+---
+
+### 12. Create IAM Service Account
+
+Replace `<ACCOUNT_ID>` with your AWS account ID.
+
+```bash
+eksctl create iamserviceaccount \
+  --cluster=my-cluster \
+  --namespace=kube-system \
+  --name=aws-load-balancer-controller \
+  --attach-policy-arn=arn:aws:iam::<ACCOUNT_ID>:policy/AWSLoadBalancerControllerIAMPolicy \
+  --override-existing-serviceaccounts \
+  --region us-east-1 \
+  --approve
+```
+
+---
+
+### 13. Install AWS Load Balancer Controller via Helm
+
+```bash
+helm repo add eks https://aws.github.io/eks-charts
+helm repo update eks
+
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system \
+  --set clusterName=my-cluster \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set region=us-east-1 \
+  --version 3.2.0
+```
+
+**Optional:** List available versions:
+
+```bash
+helm search repo eks/aws-load-balancer-controller --versions
+helm list -A
+```
+
+**Verify installation:**
+
+```bash
+kubectl get deployment -n kube-system aws-load-balancer-controller
+```
+
+---
+
+## Monitor Kubernetes with Prometheus
+
+**Install Node Exporter using Helm:**
+
+```bash
+helm repo add stable https://charts.helm.sh/stable
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm search repo prometheus-community
+```
+
+```bash
+kubectl create namespace prometheus
+```
+
+```bash
+helm install stable prometheus-community/kube-prometheus-stack -n prometheus
+```
+
+```bash
+kubectl get pods -n prometheus
+```
+
+```bash
+kubectl get svc -n prometheus
+```
+
+## Edit Prometheus Service
+
+```bash
+kubectl edit svc stable-kube-prometheus-sta-prometheus -n prometheus
+```
+
+## Edit Grafana Service
+
+```bash
+kubectl edit svc stable-grafana -n prometheus
+```
+
+```bash
+kubectl get svc -n prometheus
+```
+
+## Grafana Login Details
+
+### As deployed via Helm in EKS
+
+Check secret / **Password**:
+
+```bash
+kubectl get secret -n prometheus stable-grafana -o jsonpath="{.data.admin-password}" | base64 --decode
+```
+
+> **Username** is usually: `admin`
+
+### Change the admin User password
+
+`Administration > Users and access > Users > admin`
+
+| Username  | Password       |
+| --------- | -------------- |
+| admin     | prom-operator  |
+
+### Setup K8s Monitoring
+
+`Dashboards > New > Import`
+
+- **Kubernetes Monitoring Dashboard:** `12740`
+- **Node Exporter:** `1860`
+- **Kubernetes / Views / Namespace:** `15758`
+
+---
+
+## Installing Argo CD on the EKS Cluster
+
+- Docs: [Installing Argo CD in our cluster](https://www.eksworkshop.com/docs/automation/gitops/argocd/access_argocd)
+- GitHub Repo: [argo-helm](https://github.com/argoproj/argo-helm)
+
+### Argocd installation via helm chart
+
+```bash
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update
+```
+
+```bash
+kubectl create namespace argocd
+helm install argocd argo/argo-cd --namespace argocd
+kubectl get all -n argocd
+kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'
+```
+
+### Another way to get the loadbalancer of the argocd alb url
+
+```bash
+sudo apt install jq -y
+
+export ARGOCD_SERVER=$(kubectl get svc argocd-server -n argocd -o json | jq --raw-output '.status.loadBalancer.ingress[0].hostname')
+echo "Argo CD URL: https://$ARGOCD_SERVER"
+```
+
+### Login
+
+- **Username:** `admin`
+- Get the **password** from:
+
+  ```bash
+  kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+  ```
+
+> Password: encrypted-password
+
+---
+
+## Setup AWS Route 53
+
+1. **Create hosted zones**
+    - Domain name: `your-domain.com`
+2. Copy the **NS** (nameservers) and set them to your domain registrar (e.g., GoDaddy)
+
+> ![Note] Wait for few minutes to complete the update of your domain
+
+## Setup ACM managed certificate
+
+1. `AWS Certificate Manager > Certificates > Request certificate`
+2. **Certificate type:** Request a public certificate
+3. **Fully qualified domain name:** `your-domain.com`
+4. *Add another name to this certificate:* `*.your-domain.com`
+5. *Request*
+6. Wait and **Create records in Routes 53**
+
+---
+
+## ArgoCD Setup
+
+1. Create Application
+2. **GENERAL**
+    - **Application Name:** `online-boutique`
+    - **Project Name:** `default`
+    - **SYNC POLICY:** `Automatic`
+        - *Enable Auto-Sync*
+
+3. **SOURCE**
+    - **Repository URL:** `https://github.com/soumosarkar297/google-microservices-devsecops-project.git`
+    - **Revision:** `aws-DevSecOps`
+    - **Path:** `k8s-https`
+
+4. **DESTINATION**
+    - **Cluster URL:** `https://kubernetes.default.svc`
+    - **Namespace:** `default`
+
+5. *Create*
+
+## Create a Record in Route 53
+
+- **Record Name:** `shop`
+- **Record Type:** `A`
+- **Alias**
+  - **Route traffic to:**
+    - **Endpoint:** Alias to Application and Classic Load Balancer
+    - **Region:** `us-east-1`
+    - **Load balancer:** `shop-ns-alb`
+- **Routing policy:** Simple Routing
+
+---
+
+## Delete EKS Cluster (Cleanup) finally when you're Done with the Project
+
+```bash
+eksctl delete cluster --name my-cluster --region us-east-1
+```
+
+### Cleanup Resources and Passwords
+
+- Delete Google **app-password**
+- Delete **Personal access token** from DockerHub Account
+- Delete **ACM** managed Certificate
+- Delete **jenkins** EC2 instance
+- *(Optional)* Delete Route 53 **Hosted Zone**
+- Delete IAM user's **Access key**
+- Delete **IAM Policy**: `AWSLoadBalancerControllerIAMPolicy`
+
+---
+
+## Notes and Recommendations
+
+- Replace `<VERSION>`, `<your-server-ip>`, and other placeholders with specific values for your setup.
+- Prefer pinned versions for production environments rather than "latest".
+- Consult each project's official documentation for the most up-to date steps.
