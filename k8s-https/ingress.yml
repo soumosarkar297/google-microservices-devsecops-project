@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myingress
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/load-balancer-name: shop-ns-alb
+    # Target Type and Listener Port
+
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}, {"HTTP":80}]'
+
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:896725178483:certificate/100060e3-f430-41c9-930b-c26df3ba3f44 # Replace with your ACM certificate ARN
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+spec:
+  ingressClassName: alb
+  rules:
+    - host: shop.soumosarkar.online
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend  # Or your main store frontend
+                port:
+                  number: 80
+
+      # 👇 Default catch-all (matches any host not listed above)
+    - host: ""
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend # or your default frontend
+                port:
+                  number: 80
